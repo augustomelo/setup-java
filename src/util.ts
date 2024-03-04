@@ -158,10 +158,15 @@ function parseJavaVersionFile(content: string): string | null {
 }
 
 function parsePomXmlFile(xmlFileAsString: string): string | null {
-  const versionDefinitionTypes = [getByMavenCompilerSpecification, getBySpringBootSpecification];
+  const xmlDoc = create(xmlFileAsString);
+  const versionDefinitionTypes = [
+    getByMavenProperties,
+    getBySpringBootSpecification,
+    getByMavenCompilerPluginConfig
+  ];
 
-  for (var definitionType of versionDefinitionTypes) {
-    var version = definitionType(create(xmlFileAsString));
+  for (const definitionType of versionDefinitionTypes) {
+    const version = definitionType(xmlDoc);
 
     if (version !== null) {
       return version;
@@ -171,7 +176,7 @@ function parsePomXmlFile(xmlFileAsString: string): string | null {
   return null;
 }
 
-function getByMavenCompilerSpecification(xmlDoc: XMLBuilder): string | null {
+function getByMavenProperties(xmlDoc: XMLBuilder): string | null {
   const possibleTagsRegex = [
     'maven.compiler.source',
     'maven.compiler.release',
@@ -202,6 +207,37 @@ function getVersionByTagName(xmlDoc: XMLBuilder, tag: string): string | null {
     return null;
   }
 
+}
+
+function getByMavenCompilerPluginConfig(xmlDoc: XMLBuilder): string | null {
+  // Find <plugin> node for maven-compiler-plugin
+  const plugin = xmlDoc.find(n => {
+    if (n.node.nodeName !== "plugin") {
+      return false;
+    }
+
+    return n.some(c => {
+      if (c.node.nodeName !== "artifactId") {
+        return false;
+      }
+      if (c.node.childNodes.length !== 1) {
+        return false;
+      }
+      return c.first().toString() === "maven-compiler-plugin";
+    }, false, true);
+  }, false, true);
+
+  if (plugin === undefined) {
+    return null;
+  }
+
+  // Find <source> node in maven-compiler-plugin <configuration>
+  const source = plugin.find(n => n.node.nodeName === "source", false, true);
+  if (source === undefined || source.node.childNodes.length !== 1) {
+    return null;
+  }
+
+  return source.first().toString();
 }
 
 // By convention, action expects version 8 in the format `8.*` instead of `1.8`
