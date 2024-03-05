@@ -210,13 +210,24 @@ function getVersionByTagName(xmlDoc: XMLBuilder, tag: string): string | null {
 }
 
 function getByMavenCompilerPluginConfig(xmlDoc: XMLBuilder): string | null {
-  // Find <plugin> node for maven-compiler-plugin
-  const plugin = xmlDoc.find(n => {
-    if (n.node.nodeName !== "plugin") {
+  const source = xmlDoc.find(n => {
+    // Find <source> node
+    if (n.node.nodeName !== "source") {
       return false;
     }
-
-    return n.some(c => {
+    if (n.node.childNodes.length !== 1) {
+      return false;
+    }
+    // Must be within <configuration>
+    if (n.up().node.nodeName !== "configuration") {
+      return false;
+    }
+    // Which must be inside <plugin>
+    if (n.up().up().node.nodeName !== "plugin") {
+      return false;
+    }
+    // Make sure the plugin is maven-compiler-plugin
+    const isCompilerPlugin = n.up().up().some(c => {
       if (c.node.nodeName !== "artifactId") {
         return false;
       }
@@ -225,19 +236,14 @@ function getByMavenCompilerPluginConfig(xmlDoc: XMLBuilder): string | null {
       }
       return c.first().toString() === "maven-compiler-plugin";
     }, false, true);
-  }, false, true);
+    if (!isCompilerPlugin) {
+      return false;
+    }
 
-  if (plugin === undefined) {
-    return null;
-  }
+    return true;
+  });
 
-  // Find <source> node in maven-compiler-plugin <configuration>
-  const source = plugin.find(n => n.node.nodeName === "source", false, true);
-  if (source === undefined || source.node.childNodes.length !== 1) {
-    return null;
-  }
-
-  return source.first().toString();
+  return source?.first().toString() ?? null;
 }
 
 // By convention, action expects version 8 in the format `8.*` instead of `1.8`
